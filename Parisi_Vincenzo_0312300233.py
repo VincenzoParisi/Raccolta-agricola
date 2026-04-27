@@ -21,15 +21,15 @@ MAX_MECC_INT = 10			# massimo numero di operatori meccanizzati interni
 MAX_MAN_EXT = 20			# massimo numero di operatori manuali esterni
 MAX_MECC_EXT = 20
 
-AFFITTO_MECC_EXT = 40.0			# costo orario per ogni macchina esterna utilizzata
+AFFITTO_MECC_EXT = 40.0	    # costo orario per ogni macchina esterna utilizzata
 
-CROPS = {				# rese casuali per ettaro di ogni coltura (range min, range max)
+CROPS = {				    # rese casuali per ettaro di ogni coltura (range min, range max)
     "Orzo": (20.0, 25.0),
     "Avena": (18.0, 25.0),
     "Frumento": (25.0, 30.0),
 }
 
-SCARTI = {				# scarti per singola coltura
+SCARTI = {				    # scarti per singola coltura
     "Orzo": 0.10,
     "Avena": 0.12,
     "Frumento": 0.15,
