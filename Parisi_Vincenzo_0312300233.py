@@ -2,33 +2,37 @@ import random
 import math
 
 # ============================================================
-# COSTANTI
+# COSTANTI GLOBALI
 # ============================================================
 
-RESA_MANUALE = 0.50		# tonnellate / ora prodotte da un operatore manuale
-RESA_MECC = 2.0			# tonnellate /ora prodotte da un operatore interno meccanizzato
+RESA_MANUALE = 0.50			# tonnellate / ora prodotte da un operatore manuale
+RESA_MECC = 2.0				# tonnellate /ora prodotte da un operatore interno meccanizzato
 
-SAL_MAN_INT = 8.0		# salario orario degli operatori manuali interni
-SAL_MECC_INT = 12.0		# salario orario degli operatori meccanizzati interni 
-SAL_MAN_EXT = 12.0		# salario orario degli operatori manuali esterni
-SAL_MECC_EXT = 18.0		# salario orario degli operatori meccanizzati esterni
+SAL_MAN_INT = 8.0			# salario orario degli operatori manuali interni
+SAL_MECC_INT = 12.0			# salario orario degli operatori meccanizzati interni 
+SAL_MAN_EXT = 12.0			# salario orario degli operatori manuali esterni
+SAL_MECC_EXT = 18.0			# salario orario degli operatori meccanizzati esterni
 
-CARB_HA = 20.0			# costo carburante per ettaro per ogni macchina interna
-MANUT_HA = 8.0			# costo manutenzione per ettaro per ogni macchina interna
+CARB_HA = 20.0				# costo carburante per ettaro per ogni macchina interna
+MANUT_HA = 8.0				# costo manutenzione per ettaro per ogni macchina interna
 
-MAX_MAN_INT = 10		# massimo numero di operatori manuali interni
-MAX_MECC_INT = 10		# massimo numero di operatori meccanizzati interni
-MAX_EXTRA = 20			# massimo numero di operatori esterni
+MAX_MAN_INT = 10			# massimo numero di operatori manuali interni
+MAX_MECC_INT = 10			# massimo numero di operatori meccanizzati interni
+MAX_MAN_EXT = 20			# massimo numero di operatori manuali esterni
+MAX_MECC_EXT = 20
 
-MAX_MAN_TOT = MAX_MAN_INT + MAX_EXTRA
-MAX_MECC_TOT = MAX_MECC_INT + MAX_EXTRA
+AFFITTO_MECC_EXT = 40.0			# costo orario per ogni macchina esterna utilizzata
 
-AFFITTO_MECC_EXT = 40.0		# costo orario per ogni macchina esterna utilizzata
-
-CROPS = {			# rese casuali per ettaro di ogni coltura (range min, range max)
+CROPS = {				# rese casuali per ettaro di ogni coltura (range min, range max)
     "Orzo": (20.0, 25.0),
     "Avena": (18.0, 25.0),
     "Frumento": (25.0, 30.0),
+}
+
+SCARTI = {				# scarti per singola coltura
+    "Orzo": 0.10,
+    "Avena": 0.12,
+    "Frumento": 0.15,
 }
 
 # ============================================================
@@ -37,10 +41,6 @@ CROPS = {			# rese casuali per ettaro di ogni coltura (range min, range max)
 
 def ore_necessarie(ton, resa_oraria):
     return int(math.ceil(ton / resa_oraria - 1e-12))
-
-def costi_fissi(ettari, num_meccanizzati):
-    interni = min(num_meccanizzati, MAX_MECC_INT)
-    return num_meccanizzati * CARB_HA * ettari + interni * MANUT_HA * ettari
 
 def costo_orario(num_manuali, num_meccanizzati):
     man_int = min(num_manuali, MAX_MAN_INT)
@@ -55,69 +55,59 @@ def costo_orario(num_manuali, num_meccanizzati):
         mec_ext * SAL_MECC_EXT
     )
 
-def costo_totale(num_manuali, num_meccanizzati, ore_manual, ore_mecc, ettari):
-    base = costo_orario(num_manuali, num_meccanizzati) * max(ore_manual, ore_mecc)
-    if num_meccanizzati > 0 and ore_mecc > 0:
-        base += costi_fissi(ettari, num_meccanizzati)
-        if num_meccanizzati > MAX_MECC_INT:
-            base += (num_meccanizzati - MAX_MECC_INT) * AFFITTO_MECC_EXT * ore_mecc
-    return base
+def costo_dettagliato(num_manuali, num_meccanizzati, ore_manual, ore_mecc, ettari):
+    ore_tot = max(ore_manual, ore_mecc)
 
-# ============================================================
-# CRITERI DI ORDINAMENTO 
-# ============================================================
+    costo_or = costo_orario(num_manuali, num_meccanizzati) * ore_tot
+    carburante = num_meccanizzati * CARB_HA * ettari
+    manut = min(num_meccanizzati, MAX_MECC_INT) * MANUT_HA * ettari
 
-def criterio_velocita(soluzione):
-    return (soluzione["ore_tot"], soluzione["cost"])
+    affitto = 0
+    if num_meccanizzati > MAX_MECC_INT:
+        affitto = (num_meccanizzati - MAX_MECC_INT) * AFFITTO_MECC_EXT * ore_mecc
 
-def criterio_costo(soluzione):
-    return (soluzione["cost"], soluzione["ore_tot"])
+    totale = costo_or + carburante + manut + affitto
+    return costo_or, carburante, manut, affitto, totale
 
 # ============================================================
 # RICERCA SOLUZIONI
 # ============================================================
 
-def trova_soluzione(target, budget, ettari, max_manuali, max_meccanizzati, max_ore, priorita):
+def trova_soluzione(target, budget, ettari, max_man, max_mecc, max_ore, priorita):
     soluzioni = []
-    limite_ore = max_ore
 
-    for num_manuali in range(max_manuali + 1):
-        for num_meccanizzati in range(max_meccanizzati + 1):
-            if num_manuali == 0 and num_meccanizzati == 0:
+    for man in range(max_man + 1):
+        for mec in range(max_mecc + 1):
+            if man == 0 and mec == 0:
                 continue
 
-            for ore_mecc in range(limite_ore + 1 if num_meccanizzati > 0 else 1):
-                mecc_eff = num_meccanizzati if ore_mecc > 0 else 0
-                ton_mecc = mecc_eff * RESA_MECC * ore_mecc
+            for ore_mecc in range(max_ore + 1 if mec > 0 else 1):
+                ton_mecc = mec * RESA_MECC * ore_mecc
                 restante = target - ton_mecc
 
                 if restante <= 0:
-                    ore_manual = 0
+                    ore_man = 0
                     man_eff = 0
                 else:
-                    if num_manuali == 0:
+                    if man == 0:
                         continue
-                    man_eff = num_manuali
-                    ore_manual = ore_necessarie(restante, man_eff * RESA_MANUALE)
-                    if ore_manual > limite_ore:
+                    man_eff = man
+                    ore_man = ore_necessarie(restante, man_eff * RESA_MANUALE)
+                    if ore_man > max_ore:
                         continue
 
-                ore_tot = max(ore_manual, ore_mecc)
-                if ore_tot > limite_ore:
+                ore_tot = max(ore_man, ore_mecc)
+                if ore_tot > max_ore:
                     continue
 
-                costo = costo_totale(man_eff, mecc_eff, ore_manual, ore_mecc, ettari)
+                _, _, _, _, costo = costo_dettagliato(man_eff, mec, ore_man, ore_mecc, ettari)
                 if costo > budget:
-                    continue
-
-                potenziale = ton_mecc + man_eff * RESA_MANUALE * ore_manual
-                if potenziale + 1e-12 < target:
                     continue
 
                 soluzioni.append({
                     "num_manuali": man_eff,
-                    "num_meccanizzati": mecc_eff,
-                    "ore_manual": ore_manual,
+                    "num_meccanizzati": mec,
+                    "ore_manual": ore_man,
                     "ore_mecc": ore_mecc,
                     "ore_tot": ore_tot,
                     "cost": costo
@@ -127,143 +117,260 @@ def trova_soluzione(target, budget, ettari, max_manuali, max_meccanizzati, max_o
         return None
 
     if priorita == "FAST":
-        return min(soluzioni, key=criterio_velocita)
+        return min(soluzioni, key=lambda s: (s["ore_tot"], s["cost"]))
     else:
-        return min(soluzioni, key=criterio_costo)
-
-def trova_interne(target, budget, ettari, max_ore):
-    vel = trova_soluzione(target, budget, ettari, MAX_MAN_INT, MAX_MECC_INT, max_ore, "FAST")
-    eco = trova_soluzione(target, budget, ettari, MAX_MAN_INT, MAX_MECC_INT, max_ore, "CHEAP")
-    return vel, eco
-
-def trova_esterni(target, budget, ettari, vel, eco, max_ore):
-    est = trova_soluzione(target, budget, ettari, MAX_MAN_TOT, MAX_MECC_TOT, max_ore, "FAST")
-    if not est:
-        return None, None
-
-    if vel and est["ore_tot"] < vel["ore_tot"]:
-        return est, "TEMPO"
-    if eco and est["cost"] < eco["cost"]:
-        return est, "COSTO"
-
-    return None, None
+        return min(soluzioni, key=lambda s: (s["cost"], s["ore_tot"]))
 
 # ============================================================
-# STAMPA RISULTATI
+# STAMPA CONFRONTO SOLUZIONI
 # ============================================================
 
-def stampa(titolo, soluzione, target, budget, ettari, mostra_interni_esterni):
-    pot_mecc = soluzione["num_meccanizzati"] * RESA_MECC * soluzione["ore_mecc"]
-    pot_man = soluzione["num_manuali"] * RESA_MANUALE * soluzione["ore_manual"]
+def stampa_confronto(crop, vel, eco, est, target, budget, ettari):
+    print("\n" + "="*78)
+    print(f"CONFRONTO SOLUZIONI - {crop.upper()}".center(78))
+    print("="*78)
 
-    eff_mecc = min(target, pot_mecc)
-    eff_man = min(max(0, target - eff_mecc), pot_man)
+    print(f"{'Parametro':<28}{'Veloce':>15}{'Economica':>15}{'Esterna':>15}")
+    print("-"*78)
 
-    print("\n" + "=" * 78)
-    print(titolo.center(78))
-    print("=" * 78)
+    def split_ops(sol):
+        if sol is None:
+            return ("—","—","—","—")
+        man = sol["num_manuali"]
+        mec = sol["num_meccanizzati"]
+        man_int = min(man, MAX_MAN_INT)
+        man_ext = max(0, man - MAX_MAN_INT)
+        mec_int = min(mec, MAX_MECC_INT)
+        mec_ext = max(0, mec - MAX_MECC_INT)
+        return (man_int, man_ext, mec_int, mec_ext)
 
-    if mostra_interni_esterni:
-        print(f"{'Operatori manuali interni':35s}{min(soluzione['num_manuali'],10):>5d}  | ore {soluzione['ore_manual']:>3d}")
-        print(f"{'Operatori meccanizzati interni':35s}{min(soluzione['num_meccanizzati'],10):>5d}  | ore {soluzione['ore_mecc']:>3d}")
-        print(f"{'Operatori manuali esterni':35s}{max(0,soluzione['num_manuali']-10):>5d}  | ore {soluzione['ore_manual'] if soluzione['num_manuali']>10 else 0:>3d}")
-        print(f"{'Operatori meccanizzati esterni':35s}{max(0,soluzione['num_meccanizzati']-10):>5d}  | ore {soluzione['ore_mecc'] if soluzione['num_meccanizzati']>10 else 0:>3d}")
-    else:
-        print(f"{'Operatori manuali':35s}{soluzione['num_manuali']:>5d}  | ore {soluzione['ore_manual']:>3d}")
-        print(f"{'Operatori meccanizzati':35s}{soluzione['num_meccanizzati']:>5d}  | ore {soluzione['ore_mecc']:>3d}")
+    def get(sol, key):
+        return "—" if sol is None else sol[key]
 
-    print("\nPRODUZIONE")
-    print("-" * 78)
-    print(f"{'Produzione manuale':35s}{eff_man:>10.2f}  ton")
-    print(f"{'Produzione meccanizzata':35s}{eff_mecc:>10.2f}  ton")
-    print(f"{'Produzione totale':35s}{eff_man + eff_mecc:>10.2f}  ton")
+    def costi(sol):
+        if sol is None:
+            return ("—","—","—","—","—")
+        c_or, carb, man, aff, tot = costo_dettagliato(
+            sol["num_manuali"], sol["num_meccanizzati"],
+            sol["ore_manual"], sol["ore_mecc"], ettari
+        )
+        return (f"{c_or:.2f}", f"{carb:.2f}", f"{man:.2f}", f"{aff:.2f}", f"{tot:.2f}")
 
-    print("\nCOSTI")
-    print("-" * 78)
-    print(f"{'Budget disponibile':35s}{budget:>10.2f}  €")
-    print(f"{'Costo totale':35s}{soluzione['cost']:>10.2f}  €")
-    print(f"{'Tempo totale':35s}{soluzione['ore_tot']:>10d}  h")
+    vel_ops = split_ops(vel)
+    eco_ops = split_ops(eco)
+    est_ops = split_ops(est)
 
-    print("\nDETTAGLIO COSTI")
-    print("-" * 78)
+    vel_c = costi(vel)
+    eco_c = costi(eco)
+    est_c = costi(est)
 
-    if mostra_interni_esterni:
-        man_int = min(soluzione["num_manuali"], 10)
-        man_ext = max(0, soluzione["num_manuali"] - 10)
-        mec_int = min(soluzione["num_meccanizzati"], 10)
-        mec_ext = max(0, soluzione["num_meccanizzati"] - 10)
+    print(f"{'Manuali interni':<28}{vel_ops[0]:>15}{eco_ops[0]:>15}{est_ops[0]:>15}")
+    print(f"{'Manuali esterni':<28}{vel_ops[1]:>15}{eco_ops[1]:>15}{est_ops[1]:>15}")
+    print(f"{'Meccanizzati interni':<28}{vel_ops[2]:>15}{eco_ops[2]:>15}{est_ops[2]:>15}")
+    print(f"{'Meccanizzati esterni':<28}{vel_ops[3]:>15}{eco_ops[3]:>15}{est_ops[3]:>15}")
 
-        print(f"{'Salari manuali interni':35s}{man_int*SAL_MAN_INT*soluzione['ore_manual']:>10.2f}  €")
-        print(f"{'Salari meccanizzati interni':35s}{mec_int*SAL_MECC_INT*soluzione['ore_mecc']:>10.2f}  €")
-        print(f"{'Salari manuali esterni':35s}{man_ext*SAL_MAN_EXT*soluzione['ore_manual']:>10.2f}  €")
-        print(f"{'Salari meccanizzati esterni':35s}{mec_ext*SAL_MECC_EXT*soluzione['ore_mecc']:>10.2f}  €")
+    print(f"{'Ore manuali':<28}{str(get(vel,'ore_manual')):>15}{str(get(eco,'ore_manual')):>15}{str(get(est,'ore_manual')):>15}")
+    print(f"{'Ore meccanizzate':<28}{str(get(vel,'ore_mecc')):>15}{str(get(eco,'ore_mecc')):>15}{str(get(est,'ore_mecc')):>15}")
+    print(f"{'Ore totali':<28}{str(get(vel,'ore_tot')):>15}{str(get(eco,'ore_tot')):>15}{str(get(est,'ore_tot')):>15}")
 
-        if mec_ext > 0 and soluzione["ore_mecc"] > 0:
-            print(f"{'Affitto macchine esterne':35s}{mec_ext*AFFITTO_MECC_EXT*soluzione['ore_mecc']:>10.2f}  €")
-    else:
-        print(f"{'Salari manuali':35s}{soluzione['num_manuali']*SAL_MAN_INT*soluzione['ore_manual']:>10.2f}  €")
-        print(f"{'Salari meccanizzati':35s}{soluzione['num_meccanizzati']*SAL_MECC_INT*soluzione['ore_mecc']:>10.2f}  €")
+    print(f"{'Costo orario (€)':<28}{vel_c[0]:>15}{eco_c[0]:>15}{est_c[0]:>15}")
+    print(f"{'Carburante (€)':<28}{vel_c[1]:>15}{eco_c[1]:>15}{est_c[1]:>15}")
+    print(f"{'Manutenzione (€)':<28}{vel_c[2]:>15}{eco_c[2]:>15}{est_c[2]:>15}")
+    print(f"{'Affitto esterni (€)':<28}{vel_c[3]:>15}{eco_c[3]:>15}{est_c[3]:>15}")
+    print(f"{'Costo totale (€)':<28}{vel_c[4]:>15}{eco_c[4]:>15}{est_c[4]:>15}")
 
-    if soluzione["num_meccanizzati"] > 0 and soluzione["ore_mecc"] > 0:
-        print(f"{'Carburante macchinari':35s}{CARB_HA*ettari*soluzione['num_meccanizzati']:>10.2f}  €")
-        print(f"{'Manutenzione macchine (interne)':35s}{MANUT_HA*ettari*min(soluzione['num_meccanizzati'],10):>10.2f}  €")
-
-    print("=" * 78)
+    print("="*78)
 
 # ============================================================
-# MAIN
+# RIEPILOGO FINALE
+# ============================================================
+def riepilogo(soluzioni, target_crop, ettari, max_ore_tot, budget_tot):
+    print("\n" + "="*78)
+    print("RIEPILOGO FINALE".center(78))
+    print("="*78)
+
+    print(f"{'Coltura':<12}{'Tipo':<12}{'Ore totali':>12}{'Costo (€)':>15}")
+    print("-"*78)
+
+    totale_ore = 0
+    totale_costo = 0
+
+    max_man_int = 0
+    max_mecc_int = 0
+    max_man_ext = 0
+    max_mecc_ext = 0
+
+    for crop, dati in soluzioni.items():
+        sol = dati["sol"]
+        tipo = dati["tipo"]
+
+        if sol is None:
+            print(f"{crop:<12}{'—':<12}{'—':>12}{'—':>15}")
+            continue
+
+        man = sol["num_manuali"]
+        mec = sol["num_meccanizzati"]
+
+        man_int = min(man, MAX_MAN_INT)
+        man_ext = max(0, man - MAX_MAN_INT)
+        mec_int = min(mec, MAX_MECC_INT)
+        mec_ext = max(0, mec - MAX_MECC_INT)
+
+        max_man_int = max(max_man_int, man_int)
+        max_man_ext = max(max_man_ext, man_ext)
+        max_mecc_int = max(max_mecc_int, mec_int)
+        max_mecc_ext = max(max_mecc_ext, mec_ext)
+
+        ore = sol["ore_tot"]
+        costo = sol["cost"]
+
+        totale_ore += ore
+        totale_costo += costo
+
+        print(f"{crop:<12}{tipo:<12}{ore:>12}{costo:>15.2f}")
+
+    print("-"*78)
+    print(f"Totale ore: {totale_ore} / {max_ore_tot}")
+    print(f"Totale costo: {totale_costo:.2f} € / {budget_tot:.2f} €")
+    print("="*78)
+
+
+# ============================================================
+# MAIN 
 # ============================================================
 
 def main():
     random.seed()
 
+    # --------------------------------------------------------
+    # INSERIMENTO ETTARI E CALCOLO DELLE RESE
+    # --------------------------------------------------------
     ettari = {}
     rese = {}
     target_crop = {}
 
-    print("Inserisci gli ettari per ciascun campo (0 se non presente).")
+    print("Inserisci gli ettari per ciascun campo:")
     for crop, (lo, hi) in CROPS.items():
-        ha = float(input(f"- Ettari {crop}: ").replace(",", "."))
+        ha = float(input(f"- Ettari {crop}: "))
         ettari[crop] = ha
-        rese[crop] = random.uniform(lo, hi)
-        target_crop[crop] = ha * rese[crop]
+        resa = random.uniform(lo, hi)
+        rese[crop] = resa
+        target_crop[crop] = ha * resa * (1 - SCARTI[crop])
 
-    ett_tot = sum(ettari.values())
-    target_tot = sum(target_crop.values())
+    tot_target = sum(target_crop.values())
 
-    print("\nRESE CASUALI PER CAMPO")
-    print("-" * 78)
-    for crop in CROPS:
-        print(f"{crop:15s} | Ettari: {ettari[crop]:6.2f} | Resa: {rese[crop]:6.2f} t/ha | Totale: {target_crop[crop]:8.2f} t")
-    print("-" * 78)
-    print(f"{'Totale ettari':25s}{ett_tot:10.2f} ha")
-    print(f"{'Totale da raccogliere':25s}{target_tot:10.2f} t")
-
+    # --------------------------------------------------------
+    # 2) LOOP DI RIPETIZIONE PER BUDGET + ORE
+    # --------------------------------------------------------
     while True:
-        budget = float(input("\nInserisci il budget massimo (euro): ").replace(",", "."))
-        max_ore = int(input("Inserisci il tempo massimo per la raccolta (ore): "))
 
-        vel, eco = trova_interne(target_tot, budget, ett_tot, max_ore)
-        est, motivo = trova_esterni(target_tot, budget, ett_tot, vel, eco, max_ore)
+        budget_tot = float(input("\nBudget totale (€): "))
+        max_ore_tot = int(input("Ore totali massime: "))
 
-        if vel or eco or est:
-            if vel:
-                stampa("SOLUZIONE PIÙ VELOCE CON OPERATORI INTERNI", vel, target_tot, budget, ett_tot, False)
-            else:
-                print("\nNessuna soluzione trovata (solo interni).")
+        # ========================================================
+        # RIPARTIZIONE ORE
+        # ========================================================
+
+        ore_per_crop = {}
+        somma_ore = 0
+
+        for crop in CROPS:
+            quota = target_crop[crop] / tot_target
+            ore_per_crop[crop] = max(1, int(max_ore_tot * quota))
+            somma_ore += ore_per_crop[crop]
+
+        if somma_ore > max_ore_tot:
+            diff = somma_ore - max_ore_tot
+            coltura_principale = max(target_crop, key=target_crop.get)
+            ore_per_crop[coltura_principale] = max(1, ore_per_crop[coltura_principale] - diff)
+
+        elif somma_ore < max_ore_tot:
+            diff = max_ore_tot - somma_ore
+            coltura_principale = max(target_crop, key=target_crop.get)
+            ore_per_crop[coltura_principale] += diff
+
+        # ========================================================
+        # STAMPA RISORSE
+        # ========================================================
+
+        print("\n" + "="*78)
+        print("RIPARTIZIONE RISORSE PER COLTURA".center(78))
+        print("="*78)
+
+        print(f"{'Coltura':<10}{'Resa t/ha':>12}{'Scarto %':>10}{'Netta t':>12}{'Quota %':>10}{'Ore':>8}{'Budget (€)':>15}")
+        print("-"*78)
+
+        for crop in CROPS:
+            resa = rese[crop]
+            scarto = SCARTI[crop] * 100
+            netta = target_crop[crop]
+            quota = netta / tot_target
+            ore = ore_per_crop[crop]
+            budget_crop = budget_tot * quota
+
+            print(f"{crop:<10}{resa:>12.2f}{scarto:>10.1f}%{netta:>12.2f}{quota*100:>9.2f}%{ore:>8}{budget_crop:>15.2f}")
+
+        print("-"*78)
+        print(f"{'Totale':<10}{'':>12}{'':>10}{tot_target:>12.2f}{'100%':>10}{sum(ore_per_crop.values()):>8}{budget_tot:>15.2f}")
+        print("="*78 + "\n")
+
+        # ========================================================
+        # CALCOLO SOLUZIONI
+        # ========================================================
+
+        soluzioni = {}
+
+        for crop in CROPS:
+            print(f"\n=== {crop.upper()} ===")
+
+            quota = target_crop[crop] / tot_target
+            budget_crop = budget_tot * quota
+            max_ore_crop = ore_per_crop[crop]
+
+            max_man_int_only = MAX_MAN_INT
+            max_mecc_int_only = MAX_MECC_INT
+
+            max_man_ext_ok = MAX_MAN_INT + MAX_MAN_EXT
+            max_mecc_ext_ok = MAX_MECC_INT + MAX_MECC_EXT
+
+            vel = trova_soluzione(
+                target_crop[crop], budget_crop, ettari[crop],
+                max_man_int_only, max_mecc_int_only, max_ore_crop, "FAST"
+            )
+            eco = trova_soluzione(
+                target_crop[crop], budget_crop, ettari[crop],
+                max_man_int_only, max_mecc_int_only, max_ore_crop, "CHEAP"
+            )
+            est = trova_soluzione(
+                target_crop[crop], budget_crop, ettari[crop],
+                max_man_ext_ok, max_mecc_ext_ok, max_ore_crop, "FAST"
+            )
+
+            stampa_confronto(crop, vel, eco, est, target_crop[crop], budget_crop, ettari[crop])
 
             if eco:
-                stampa("SOLUZIONE PIÙ ECONOMICA CON OPERATORI INTERNI", eco, target_tot, budget, ett_tot, False)
+                scelta = eco
+                tipo_scelta = "ECONOMICA"
+            elif vel:
+                scelta = vel
+                tipo_scelta = "VELOCE"
+            else:
+                scelta = est
+                tipo_scelta = "ESTERNA"
 
-            if est:
-                print(f"\nConviene ingaggiare operatori esterni per motivo di: {motivo}".center(78))
-                stampa("SOLUZIONE CON OPERATORI ESTERNI", est, target_tot, budget, ett_tot, True)
+            soluzioni[crop] = {
+                "sol": scelta,
+                "tipo": tipo_scelta
+            }
 
+        riepilogo(soluzioni, target_crop, ettari, max_ore_tot, budget_tot)
+
+        # ========================================================
+        # RIPETERE IL CALCOLO?
+        # ========================================================
+        scelta = input("\nVuoi reinserire SOLO budget e ore e rifare il calcolo? (s/n): ").strip().lower()
+        if scelta != "s":
+            print("Fine programma.")
             break
 
-        if input("\nBudget/tempo insufficienti. Riprovo? s/n: ").lower() != "s":
-            print("\nProgramma terminato.")
-            return
 main()
-input("\nPremi INVIO per uscire...")
-
