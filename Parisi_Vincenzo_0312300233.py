@@ -6,14 +6,14 @@ import math
 # ============================================================
 
 RESA_MANUALE = 0.50         # tonnellate / ora prodotte da un operatore manuale
-RESA_MECC = 2.0             # tonnellate /ora prodotte da un operatore interno meccanizzato
+RESA_MECC = 1.5             # tonnellate /ora prodotte da un operatore interno meccanizzato
 
 SAL_MAN_INT = 8.0           # salario orario degli operatori manuali interni
-SAL_MECC_INT = 12.0         # salario orario degli operatori meccanizzati interni 
-SAL_MAN_EXT = 12.0          # salario orario degli operatori manuali esterni
-SAL_MECC_EXT = 18.0         # salario orario degli operatori meccanizzati esterni
+SAL_MECC_INT = 10.0         # salario orario degli operatori meccanizzati interni 
+SAL_MAN_EXT = 10.0          # salario orario degli operatori manuali esterni
+SAL_MECC_EXT = 12.0         # salario orario degli operatori meccanizzati esterni
 
-CARB_HA = 20.0              # costo carburante per ettaro per ogni macchina interna
+CARB_HA = 18.0              # costo carburante per ettaro per ogni macchina interna
 MANUT_HA = 8.0              # costo manutenzione per ettaro per ogni macchina interna
 
 MAX_MAN_INT = 10            # massimo numero di operatori manuali interni
@@ -21,7 +21,7 @@ MAX_MECC_INT = 10           # massimo numero di operatori meccanizzati interni
 MAX_MAN_EXT = 20            # massimo numero di operatori manuali esterni
 MAX_MECC_EXT = 20
 
-AFFITTO_MECC_EXT = 40.0     # costo orario per ogni macchina esterna utilizzata
+AFFITTO_MECC_EXT = 25.0     # costo orario per ogni macchina esterna utilizzata
 
 SCARTI = {                  # scarti per singola coltura
     "Orzo": 0.10,
