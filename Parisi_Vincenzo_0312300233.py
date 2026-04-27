@@ -5,34 +5,34 @@ import math
 # COSTANTI GLOBALI
 # ============================================================
 
-RESA_MANUALE = 0.50			# tonnellate / ora prodotte da un operatore manuale
-RESA_MECC = 2.0				# tonnellate /ora prodotte da un operatore interno meccanizzato
+RESA_MANUALE = 0.50         # tonnellate / ora prodotte da un operatore manuale
+RESA_MECC = 2.0             # tonnellate /ora prodotte da un operatore interno meccanizzato
 
-SAL_MAN_INT = 8.0			# salario orario degli operatori manuali interni
-SAL_MECC_INT = 12.0			# salario orario degli operatori meccanizzati interni 
-SAL_MAN_EXT = 12.0			# salario orario degli operatori manuali esterni
-SAL_MECC_EXT = 18.0			# salario orario degli operatori meccanizzati esterni
+SAL_MAN_INT = 8.0           # salario orario degli operatori manuali interni
+SAL_MECC_INT = 12.0         # salario orario degli operatori meccanizzati interni 
+SAL_MAN_EXT = 12.0          # salario orario degli operatori manuali esterni
+SAL_MECC_EXT = 18.0         # salario orario degli operatori meccanizzati esterni
 
-CARB_HA = 20.0				# costo carburante per ettaro per ogni macchina interna
-MANUT_HA = 8.0				# costo manutenzione per ettaro per ogni macchina interna
+CARB_HA = 20.0              # costo carburante per ettaro per ogni macchina interna
+MANUT_HA = 8.0              # costo manutenzione per ettaro per ogni macchina interna
 
-MAX_MAN_INT = 10			# massimo numero di operatori manuali interni
-MAX_MECC_INT = 10			# massimo numero di operatori meccanizzati interni
-MAX_MAN_EXT = 20			# massimo numero di operatori manuali esterni
+MAX_MAN_INT = 10            # massimo numero di operatori manuali interni
+MAX_MECC_INT = 10           # massimo numero di operatori meccanizzati interni
+MAX_MAN_EXT = 20            # massimo numero di operatori manuali esterni
 MAX_MECC_EXT = 20
 
-AFFITTO_MECC_EXT = 40.0	    # costo orario per ogni macchina esterna utilizzata
+AFFITTO_MECC_EXT = 40.0     # costo orario per ogni macchina esterna utilizzata
 
-CROPS = {				    # rese casuali per ettaro di ogni coltura (range min, range max)
-    "Orzo": (20.0, 25.0),
-    "Avena": (18.0, 25.0),
-    "Frumento": (25.0, 30.0),
-}
-
-SCARTI = {				    # scarti per singola coltura
+SCARTI = {                  # scarti per singola coltura
     "Orzo": 0.10,
     "Avena": 0.12,
     "Frumento": 0.15,
+}
+
+CROPS = {                   # rese casuali per ettaro di ogni coltura (range min, range max)
+    "Orzo": (20.0, 25.0),
+    "Avena": (18.0, 25.0),
+    "Frumento": (25.0, 30.0),
 }
 
 # ============================================================
@@ -184,6 +184,7 @@ def stampa_confronto(crop, vel, eco, est, target, budget, ettari):
 # ============================================================
 # RIEPILOGO FINALE
 # ============================================================
+
 def riepilogo(soluzioni, target_crop, ettari, max_ore_tot, budget_tot):
     print("\n" + "="*78)
     print("RIEPILOGO FINALE".center(78))
@@ -234,7 +235,6 @@ def riepilogo(soluzioni, target_crop, ettari, max_ore_tot, budget_tot):
     print(f"Totale costo: {totale_costo:.2f} € / {budget_tot:.2f} €")
     print("="*78)
 
-
 # ============================================================
 # MAIN 
 # ============================================================
@@ -260,7 +260,7 @@ def main():
     tot_target = sum(target_crop.values())
 
     # --------------------------------------------------------
-    # 2) LOOP DI RIPETIZIONE PER BUDGET + ORE
+    # LOOP DI RIPETIZIONE PER BUDGET + ORE
     # --------------------------------------------------------
     while True:
 
@@ -346,8 +346,16 @@ def main():
                 max_man_ext_ok, max_mecc_ext_ok, max_ore_crop, "FAST"
             )
 
+            if vel is None and eco is None and est is None:
+                print(f"\nNessuna soluzione trovata per {crop}. Budget/ore insufficienti per completare la raccolta.")
+                soluzioni[crop] = {"sol": None, "tipo": "—"}
+                continue
+
             stampa_confronto(crop, vel, eco, est, target_crop[crop], budget_crop, ettari[crop])
 
+            # ========================================================
+            # SCELTA DELLA SOLUZIONE
+            # ========================================================
             if eco:
                 scelta = eco
                 tipo_scelta = "ECONOMICA"
