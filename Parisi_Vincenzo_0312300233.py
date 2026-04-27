@@ -1,39 +1,47 @@
 import random
 import math
 
-# ============================================================
 # COSTANTI GLOBALI
-# ============================================================
 
-RESA_MANUALE = 0.50         # tonnellate / ora prodotte da un operatore manuale
-RESA_MECC = 1.5             # tonnellate /ora prodotte da un operatore interno meccanizzato
+RESA_MANUALE = 0.50                    # tonnellate / ora prodotte da un operatore manuale
+RESA_MECC = 1.5                        # tonnellate /ora prodotte da un operatore interno meccanizzato
 
-SAL_MAN_INT = 8.0           # salario orario degli operatori manuali interni
-SAL_MECC_INT = 10.0         # salario orario degli operatori meccanizzati interni 
-SAL_MAN_EXT = 10.0          # salario orario degli operatori manuali esterni
-SAL_MECC_EXT = 12.0         # salario orario degli operatori meccanizzati esterni
+SAL_MAN_INT = 8.0                      # salario orario degli operatori manuali interni
+SAL_MECC_INT = 10.0                    # salario orario degli operatori meccanizzati interni 
+SAL_MAN_EXT = 10.0                     # salario orario degli operatori manuali esterni
+SAL_MECC_EXT = 12.5                    # salario orario degli operatori meccanizzati esterni
 
-CARB_HA = 18.0              # costo carburante per ettaro per ogni macchina interna
-MANUT_HA = 8.0              # costo manutenzione per ettaro per ogni macchina interna
+CARB_HA = 18.0                         # costo carburante per ettaro per ogni macchina interna
+MANUT_HA = 8.0                         # costo manutenzione per ettaro per ogni macchina interna
 
-MAX_MAN_INT = 10            # massimo numero di operatori manuali interni
-MAX_MECC_INT = 10           # massimo numero di operatori meccanizzati interni
-MAX_MAN_EXT = 20            # massimo numero di operatori manuali esterni
-MAX_MECC_EXT = 20
+CROPS = {                              # rese casuali per ettaro di ogni coltura (range min, range max)
+    "Orzo": (20.0, 25.0),
+    "Avena": (18.0, 25.0),
+    "Frumento": (25.0, 30.0),
+}
 
-AFFITTO_MECC_EXT = 25.0     # costo orario per ogni macchina esterna utilizzata
-
-SCARTI = {                  # scarti per singola coltura
+SCARTI = {                             # scarti per singola coltura (per calcolo del netto)
     "Orzo": 0.10,
     "Avena": 0.12,
     "Frumento": 0.15,
 }
 
-CROPS = {                   # rese casuali per ettaro di ogni coltura (range min, range max)
-    "Orzo": (20.0, 25.0),
-    "Avena": (18.0, 25.0),
-    "Frumento": (25.0, 30.0),
-}
+# LIMITI GLOBALI
+
+MAX_MAN_INT = 10                       # numero massimo operatori manuali interni
+MAX_MECC_INT = 10                      # numero massimo operatori meccanizzati interni
+MAX_MAN_EXT = 20                       # numero massimo operatori manuali esterni
+MAX_MECC_EXT = 20                      # numero massimo operatori meccanizzati esterni
+
+AFFITTO_MECC_EXT = 25.0                # costo orario per ogni macchina esterna utilizzata
+
+# LIMITI PER SOLUZIONI CHEAP E FAST
+
+MAX_MAN_INT_CHEAP = 8                  # numero massimo operatori manuali utilizzabili per soluzione CHEAP
+MAX_MECC_INT_CHEAP = 8                 # numero massimo operatori meccanizzati utilizzabili per soluzione CHEAP
+
+MAX_MAN_INT_FAST = 10                  # numero massimo operatori manuali utilizzabili per soluzione FAST
+MAX_MECC_INT_FAST = 10                 # numero massimo operatori meccanizzati utilizzabili per soluzione FAST
 
 # ============================================================
 # FUNZIONI DI SUPPORTO
@@ -116,13 +124,24 @@ def trova_soluzione(target, budget, ettari, max_man, max_mecc, max_ore, priorita
     if not soluzioni:
         return None
 
+    # ============================================================
+    # CRITERI DI SCELTA
+    # ============================================================
+
     if priorita == "FAST":
         return min(soluzioni, key=lambda s: (s["ore_tot"], s["cost"]))
+
+    elif priorita == "CHEAP":
+        return min(soluzioni, key=lambda s: (s["cost"], s["ore_tot"]))
+
+    elif priorita == "EXT":
+        return min(soluzioni, key=lambda s: s["ore_tot"])
+
     else:
         return min(soluzioni, key=lambda s: (s["cost"], s["ore_tot"]))
 
 # ============================================================
-# STAMPA CONFRONTO SOLUZIONI
+# STAMPA CONFRONTO
 # ============================================================
 
 def stampa_confronto(crop, vel, eco, est, target, budget, ettari):
@@ -182,7 +201,7 @@ def stampa_confronto(crop, vel, eco, est, target, budget, ettari):
     print("="*78)
 
 # ============================================================
-# RIEPILOGO FINALE
+# RIEPILOGO
 # ============================================================
 
 def riepilogo(soluzioni, target_crop, ettari, max_ore_tot, budget_tot):
@@ -196,11 +215,6 @@ def riepilogo(soluzioni, target_crop, ettari, max_ore_tot, budget_tot):
     totale_ore = 0
     totale_costo = 0
 
-    max_man_int = 0
-    max_mecc_int = 0
-    max_man_ext = 0
-    max_mecc_ext = 0
-
     for crop, dati in soluzioni.items():
         sol = dati["sol"]
         tipo = dati["tipo"]
@@ -208,19 +222,6 @@ def riepilogo(soluzioni, target_crop, ettari, max_ore_tot, budget_tot):
         if sol is None:
             print(f"{crop:<12}{'—':<12}{'—':>12}{'—':>15}")
             continue
-
-        man = sol["num_manuali"]
-        mec = sol["num_meccanizzati"]
-
-        man_int = min(man, MAX_MAN_INT)
-        man_ext = max(0, man - MAX_MAN_INT)
-        mec_int = min(mec, MAX_MECC_INT)
-        mec_ext = max(0, mec - MAX_MECC_INT)
-
-        max_man_int = max(max_man_int, man_int)
-        max_man_ext = max(max_man_ext, man_ext)
-        max_mecc_int = max(max_mecc_int, mec_int)
-        max_mecc_ext = max(max_mecc_ext, mec_ext)
 
         ore = sol["ore_tot"]
         costo = sol["cost"]
@@ -236,15 +237,12 @@ def riepilogo(soluzioni, target_crop, ettari, max_ore_tot, budget_tot):
     print("="*78)
 
 # ============================================================
-# MAIN 
+# MAIN
 # ============================================================
 
 def main():
     random.seed()
 
-    # --------------------------------------------------------
-    # INSERIMENTO ETTARI E CALCOLO DELLE RESE
-    # --------------------------------------------------------
     ettari = {}
     rese = {}
     target_crop = {}
@@ -259,17 +257,10 @@ def main():
 
     tot_target = sum(target_crop.values())
 
-    # --------------------------------------------------------
-    # LOOP DI RIPETIZIONE PER BUDGET + ORE
-    # --------------------------------------------------------
     while True:
 
         budget_tot = float(input("\nBudget totale (€): "))
         max_ore_tot = int(input("Ore totali massime: "))
-
-        # ========================================================
-        # RIPARTIZIONE ORE
-        # ========================================================
 
         ore_per_crop = {}
         somma_ore = 0
@@ -288,10 +279,6 @@ def main():
             diff = max_ore_tot - somma_ore
             coltura_principale = max(target_crop, key=target_crop.get)
             ore_per_crop[coltura_principale] += diff
-
-        # ========================================================
-        # STAMPA RISORSE
-        # ========================================================
 
         print("\n" + "="*78)
         print("RIPARTIZIONE RISORSE PER COLTURA".center(78))
@@ -314,10 +301,6 @@ def main():
         print(f"{'Totale':<10}{'':>12}{'':>10}{tot_target:>12.2f}{'100%':>10}{sum(ore_per_crop.values()):>8}{budget_tot:>15.2f}")
         print("="*78 + "\n")
 
-        # ========================================================
-        # CALCOLO SOLUZIONI
-        # ========================================================
-
         soluzioni = {}
 
         for crop in CROPS:
@@ -327,35 +310,32 @@ def main():
             budget_crop = budget_tot * quota
             max_ore_crop = ore_per_crop[crop]
 
-            max_man_int_only = MAX_MAN_INT
-            max_mecc_int_only = MAX_MECC_INT
-
-            max_man_ext_ok = MAX_MAN_INT + MAX_MAN_EXT
-            max_mecc_ext_ok = MAX_MECC_INT + MAX_MECC_EXT
+            # ============================================================
+            # USO LIMITI GLOBALI
+            # ============================================================
 
             vel = trova_soluzione(
                 target_crop[crop], budget_crop, ettari[crop],
-                max_man_int_only, max_mecc_int_only, max_ore_crop, "FAST"
+                MAX_MAN_INT_FAST, MAX_MECC_INT_FAST, max_ore_crop, "FAST"
             )
             eco = trova_soluzione(
                 target_crop[crop], budget_crop, ettari[crop],
-                max_man_int_only, max_mecc_int_only, max_ore_crop, "CHEAP"
+                MAX_MAN_INT_CHEAP, MAX_MECC_INT_CHEAP, max_ore_crop, "CHEAP"
             )
             est = trova_soluzione(
                 target_crop[crop], budget_crop, ettari[crop],
-                max_man_ext_ok, max_mecc_ext_ok, max_ore_crop, "FAST"
+                MAX_MAN_INT + MAX_MAN_EXT,
+                MAX_MECC_INT + MAX_MECC_EXT,
+                max_ore_crop, "EXT"
             )
 
             if vel is None and eco is None and est is None:
-                print(f"\nNessuna soluzione trovata per {crop}. Budget/ore insufficienti per completare la raccolta.")
+                print(f"\nNessuna soluzione trovata per {crop}. Budget/ore insufficienti.")
                 soluzioni[crop] = {"sol": None, "tipo": "—"}
                 continue
 
             stampa_confronto(crop, vel, eco, est, target_crop[crop], budget_crop, ettari[crop])
 
-            # ========================================================
-            # SCELTA DELLA SOLUZIONE
-            # ========================================================
             if eco:
                 scelta = eco
                 tipo_scelta = "ECONOMICA"
@@ -366,16 +346,10 @@ def main():
                 scelta = est
                 tipo_scelta = "ESTERNA"
 
-            soluzioni[crop] = {
-                "sol": scelta,
-                "tipo": tipo_scelta
-            }
+            soluzioni[crop] = {"sol": scelta, "tipo": tipo_scelta}
 
         riepilogo(soluzioni, target_crop, ettari, max_ore_tot, budget_tot)
 
-        # ========================================================
-        # RIPETERE IL CALCOLO?
-        # ========================================================
         scelta = input("\nVuoi reinserire SOLO budget e ore e rifare il calcolo? (s/n): ").strip().lower()
         if scelta != "s":
             print("Fine programma.")
